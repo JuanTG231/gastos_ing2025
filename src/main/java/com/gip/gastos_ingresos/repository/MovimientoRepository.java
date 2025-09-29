@@ -12,6 +12,8 @@ import java.util.List;
 @Repository
 public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
 
+    boolean existsByRecurrencia(Recurrencia recurrencia);
+
     // Verificar si existen movimientos ligados a una categoría
     boolean existsByCategoriaId(Long categoriaId);
 

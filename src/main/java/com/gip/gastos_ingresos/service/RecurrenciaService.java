@@ -1,11 +1,16 @@
 package com.gip.gastos_ingresos.service;
+import com.gip.gastos_ingresos.dto.RecurrenciaUpdateDTO;
 import com.gip.gastos_ingresos.entity.Recurrencia;
 import com.gip.gastos_ingresos.entity.Usuario;
 import com.gip.gastos_ingresos.entity.Categoria;
 import com.gip.gastos_ingresos.repository.RecurrenciaRepository;
+import com.gip.gastos_ingresos.repository.MovimientoRepository;
+
+import com.gip.gastos_ingresos.service.CategoriaService;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -13,9 +18,16 @@ import java.util.Optional;
 public class RecurrenciaService {
 
     private final RecurrenciaRepository recurrenciaRepository;
+    private final MovimientoRepository movimientoRepository; // 👈 lo agregamos
+    private final CategoriaService categoriaService; // 👈 nuevo
 
-    public RecurrenciaService(RecurrenciaRepository recurrenciaRepository) {
+
+    public RecurrenciaService(RecurrenciaRepository recurrenciaRepository, MovimientoRepository movimientoRepository, CategoriaService categoriaService) {
         this.recurrenciaRepository = recurrenciaRepository;
+        this.movimientoRepository = movimientoRepository; // 👈 inicializamos
+        this.categoriaService = categoriaService; // 👈 inicializamos
+
+
     }
 
     // Crear una nueva recurrencia
@@ -47,8 +59,12 @@ public class RecurrenciaService {
             throw new RuntimeException("La fecha de fin no puede ser anterior a la fecha de inicio");
         }
 
+        // ✅ Validar categoría pertenece al usuario
+        Categoria cat = categoriaService.buscarPorIdYUsuario(categoria.getId(), usuario)
+                .orElseThrow(() -> new RuntimeException("Categoría no encontrada o no pertenece al usuario"));
+
         recurrencia.setUsuario(usuario);
-        recurrencia.setCategoria(categoria);
+        recurrencia.setCategoria(cat);
 
         return recurrenciaRepository.save(recurrencia);
     }
@@ -60,16 +76,56 @@ public class RecurrenciaService {
 
     // Listar recurrencias activas
     public List<Recurrencia> listarRecurrenciasActivas(Usuario usuario) {
-        return recurrenciaRepository.findByUsuarioAndFechaFinIsNullOrFechaFinAfter(usuario, LocalDate.now());
+        List<Recurrencia> activas = new ArrayList<>();
+        activas.addAll(recurrenciaRepository.findByUsuarioAndFechaFinIsNull(usuario));
+        activas.addAll(recurrenciaRepository.findByUsuarioAndFechaFinAfter(usuario, LocalDate.now()));
+        return activas;
     }
 
     // Buscar recurrencia por ID
-    public Optional<Recurrencia> buscarPorId(Long id) {
-        return recurrenciaRepository.findById(id);
+    public Optional<Recurrencia> buscarPorIdYUsuario(Long id, Usuario usuario) {
+        return recurrenciaRepository.findByIdAndUsuario(id, usuario);
+    }
+
+    //editar Recurrencia
+    public Recurrencia editarRecurrencia(Long id, RecurrenciaUpdateDTO detalles, Usuario usuario) {
+        // Buscar la recurrencia del usuario
+        Recurrencia existente = recurrenciaRepository.findByIdAndUsuario(id, usuario)
+                .orElseThrow(() -> new RuntimeException("Recurrencia no encontrada o no pertenece al usuario"));
+
+        // Actualizar campos solo si no vienen nulos
+        if (detalles.getMonto() != null) existente.setMonto(detalles.getMonto());
+        if (detalles.getDescripcion() != null) existente.setDescripcion(detalles.getDescripcion());
+        if (detalles.getFrecuencia() != null) existente.setFrecuencia(detalles.getFrecuencia());
+        if (detalles.getFechaInicio() != null) existente.setFechaInicio(detalles.getFechaInicio());
+        if (detalles.getFechaFin() != null) existente.setFechaFin(detalles.getFechaFin());
+
+        // Validar fechas
+        if (existente.getFechaFin() != null &&
+                existente.getFechaFin().isBefore(existente.getFechaInicio())) {
+            throw new RuntimeException("La fecha de fin no puede ser anterior a la fecha de inicio");
+        }
+
+        // Validar y actualizar categoría si se manda un nuevo id
+        if (detalles.getCategoriaId() != null) {
+            Categoria cat = categoriaService.buscarPorIdYUsuario(detalles.getCategoriaId(), usuario)
+                    .orElseThrow(() -> new RuntimeException("Categoría no encontrada o no pertenece al usuario"));
+            existente.setCategoria(cat);
+        }
+
+        return recurrenciaRepository.save(existente);
     }
 
     // Eliminar recurrencia
-    public void eliminarRecurrencia(Long id) {
-        recurrenciaRepository.deleteById(id);
+    public void eliminarRecurrencia(Long id, Usuario usuario) {
+        Recurrencia recurrencia = recurrenciaRepository.findByIdAndUsuario(id, usuario)
+                .orElseThrow(() -> new RuntimeException("Recurrencia no encontrada o no pertenece al usuario"));
+
+        // 🔎 validar si tiene movimientos asociados
+        if (movimientoRepository.existsByRecurrencia(recurrencia)) {
+            throw new RuntimeException("No se puede eliminar la recurrencia porque tiene movimientos asociados");
+        }
+
+        recurrenciaRepository.delete(recurrencia);
     }
 }
