@@ -5,7 +5,9 @@ import com.gip.gastos_ingresos.entity.Categoria;
 import com.gip.gastos_ingresos.entity.Recurrencia;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
-
+import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -16,6 +18,14 @@ public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
 
     // Verificar si existen movimientos ligados a una categoría
     boolean existsByCategoriaId(Long categoriaId);
+
+    Optional<Movimiento> findByIdAndUsuario(Long id, Usuario usuario);
+
+    boolean existsByCategoriaAndUsuario(Categoria categoria, Usuario usuario);
+
+    // Opcionales (si vas a paginar)
+    Page<Movimiento> findByUsuario(Usuario usuario, Pageable pageable);
+    Page<Movimiento> findByUsuarioAndTipoIgnoreCase(Usuario usuario, String tipo, Pageable pageable);
 
     // Buscar todos los movimientos de un usuario
     List<Movimiento> findByUsuario(Usuario usuario);

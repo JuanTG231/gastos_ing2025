@@ -19,6 +19,15 @@ public class MovimientoService {
         this.movimientoRepository = movimientoRepository;
     }
 
+    // Metodo centralizado para conversión a MXN aqui vamos a conectar la api de tipo de cambio
+    private BigDecimal convertirAMxn(BigDecimal monto, String moneda) {
+        if ("MXN".equalsIgnoreCase(moneda)) {
+            return monto;
+        }
+        // TODO: aquí podrías integrar una API real de tipo de cambio
+        return monto; // por ahora lo dejamos igual
+    }
+
     // Crear un movimiento
     public Movimiento crearMovimiento(Movimiento movimiento, Usuario usuario, Categoria categoria, Recurrencia recurrencia) {
         // Validar tipo
@@ -44,15 +53,26 @@ public class MovimientoService {
             movimiento.setFecha(LocalDate.now());
         }
 
-        // Calcular monto en MXN (en el futuro aquí conectamos con API de tipo de cambio)
-        if (movimiento.getMoneda().equalsIgnoreCase("MXN")) {
-            movimiento.setMontoMxn(movimiento.getMonto());
-        } else {
-            // Por ahora dejamos el equivalente igual, más adelante integramos API real
-            movimiento.setMontoMxn(movimiento.getMonto());
-        }
+        movimiento.setMontoMxn(convertirAMxn(movimiento.getMonto(), movimiento.getMoneda()));
+
 
         return movimientoRepository.save(movimiento);
+    }
+
+    //editar movimiento
+    public Movimiento editarMovimiento(Movimiento existente, Movimiento datosActualizados, Categoria categoria, Recurrencia recurrencia) {
+        existente.setCategoria(categoria);
+        existente.setRecurrencia(recurrencia);
+        existente.setTipo(datosActualizados.getTipo());
+        existente.setMonto(datosActualizados.getMonto());
+        existente.setMoneda(datosActualizados.getMoneda());
+        existente.setDescripcion(datosActualizados.getDescripcion());
+        existente.setFecha(datosActualizados.getFecha());
+
+        // Recalcular montoMxn
+        existente.setMontoMxn(convertirAMxn(datosActualizados.getMonto(), datosActualizados.getMoneda()));
+
+        return movimientoRepository.save(existente);
     }
 
     // Listar todos los movimientos de un usuario
@@ -71,12 +91,14 @@ public class MovimientoService {
     }
 
     // Buscar movimiento por ID
-    public Optional<Movimiento> buscarPorId(Long id) {
-        return movimientoRepository.findById(id);
+    public Optional<Movimiento> buscarPorIdDeUsuario(Long id, Usuario usuario) {
+        return movimientoRepository.findByIdAndUsuario(id, usuario);
     }
 
     // Eliminar movimiento
-    public void eliminarMovimiento(Long id) {
-        movimientoRepository.deleteById(id);
+    public void eliminarMovimiento(Long id, Usuario usuario) {
+        Movimiento mov = movimientoRepository.findByIdAndUsuario(id, usuario)
+                .orElseThrow(() -> new RuntimeException("Movimiento no encontrado o no pertenece al usuario"));
+        movimientoRepository.delete(mov);
     }
 }
